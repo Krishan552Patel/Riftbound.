@@ -1,26 +1,21 @@
-import { NextRequest, NextResponse } from 'next/server'
-
-const BASE = 'https://api.riftcodex.com'
+import { type NextRequest, NextResponse } from 'next/server'
+import { upstreamFetch } from '@/lib/api/server'
+import type { Card } from '@/types'
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params
   try {
-    const res = await fetch(`${BASE}/cards/${id}`, {
-      next: { revalidate: 3600 }, // 1-hour cache for individual cards
-    })
-    if (!res.ok) {
-      return NextResponse.json({ error: 'Card not found' }, { status: res.status })
-    }
-    const data = await res.json()
+    const data = await upstreamFetch<Card>(`/cards/${id}`, 3600)
     return NextResponse.json(data, {
       headers: {
-        'Cache-Control': 's-maxage=3600, stale-while-revalidate=7200',
+        'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
       },
     })
-  } catch {
-    return NextResponse.json({ error: 'Failed to fetch card' }, { status: 500 })
+  } catch (err) {
+    console.error(`[/api/cards/${id}]`, err)
+    return NextResponse.json({ error: 'Card not found' }, { status: 404 })
   }
 }

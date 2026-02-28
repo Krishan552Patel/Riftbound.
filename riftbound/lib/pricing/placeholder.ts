@@ -1,4 +1,5 @@
 import type { Card, CardPrice } from '@/types'
+import type { PriceProvider } from './types'
 
 const RARITY_RANGES: Record<string, [number, number]> = {
   Common: [0.10, 0.50],
@@ -8,7 +9,10 @@ const RARITY_RANGES: Record<string, [number, number]> = {
   Legendary: [20.00, 100.00],
 }
 
-// djb2 hash → float 0–1 (deterministic per card ID)
+/**
+ * djb2 hash → float 0–1 (deterministic per seed string).
+ * Same card always yields the same price — no randomness at runtime.
+ */
 function hashString(s: string): number {
   let h = 5381
   for (let i = 0; i < s.length; i++) {
@@ -20,8 +24,7 @@ function hashString(s: string): number {
 
 /**
  * Generate a deterministic placeholder price for a card.
- * To swap in real Shopify prices: implement the same CardPrice interface
- * and replace calls to getCardPrice() with your Shopify price fetcher.
+ * Exported for synchronous use in components that can't await.
  */
 export function getCardPrice(card: Card): CardPrice {
   const [lo, hi] = RARITY_RANGES[card.classification.rarity] ?? [0.10, 1.00]
@@ -38,6 +41,20 @@ export function getCardPrice(card: Card): CardPrice {
   }
 }
 
-export function formatPrice(value: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
+/**
+ * Placeholder PriceProvider adapter.
+ * To swap in live Shopify prices: implement PriceProvider in a new file
+ * and change the export in lib/pricing/index.ts.
+ */
+export const placeholderPriceProvider: PriceProvider = {
+  label: 'Placeholder',
+  isLive: false,
+
+  async getPrice(card: Card): Promise<CardPrice> {
+    return getCardPrice(card)
+  },
+
+  async getPrices(cards: Card[]): Promise<Record<string, CardPrice>> {
+    return Object.fromEntries(cards.map((card) => [card.id, getCardPrice(card)]))
+  },
 }

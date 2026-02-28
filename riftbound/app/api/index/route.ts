@@ -1,22 +1,17 @@
 import { NextResponse } from 'next/server'
+import { upstreamFetch } from '@/lib/api/server'
 
-const BASE = 'https://api.riftcodex.com'
-
+// The full card index can be large — cache aggressively
 export async function GET() {
   try {
-    const res = await fetch(`${BASE}/index`, {
-      next: { revalidate: 86400 },
-    })
-    if (!res.ok) {
-      return NextResponse.json({ error: 'Upstream error' }, { status: res.status })
-    }
-    const data = await res.json()
+    const data = await upstreamFetch<unknown>('/index', 86400)
     return NextResponse.json(data, {
       headers: {
-        'Cache-Control': 's-maxage=86400, stale-while-revalidate=172800',
+        'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=172800',
       },
     })
-  } catch {
-    return NextResponse.json({ error: 'Failed to fetch index' }, { status: 500 })
+  } catch (err) {
+    console.error('[/api/index]', err)
+    return NextResponse.json({ error: 'Failed to fetch index' }, { status: 502 })
   }
 }
