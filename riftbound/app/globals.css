@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: #09090b;
+  color: #f4f4f5;
+}
+
+/* Rarity color utilities */
+.rarity-common    { color: #a1a1aa; }
+.rarity-uncommon  { color: #34d399; }
+.rarity-rare      { color: #60a5fa; }
+.rarity-epic      { color: #c084fc; }
+.rarity-legendary { color: #fbbf24; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #18181b; }
+::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #52525b; }
