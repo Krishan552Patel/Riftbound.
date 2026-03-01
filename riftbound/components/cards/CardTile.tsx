@@ -26,10 +26,10 @@ export default function CardTile({ card, ownedQty, compact, onAddToDeck }: CardT
     >
       <Link href={`/cards/${card.id}`} className="block">
         <div className="relative aspect-[3/4] w-full overflow-hidden bg-zinc-800">
-          {card.media.image_url ? (
+          {card.media?.image_url ? (
             <Image
               src={card.media.image_url}
-              alt={card.media.accessibility_text || card.name}
+              alt={card.media?.accessibility_text || card.name}
               fill
               sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
               className="object-cover transition-transform duration-300 group-hover:scale-105"
