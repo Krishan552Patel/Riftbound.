@@ -80,10 +80,10 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
         {/* Card image */}
         <div className="flex-shrink-0">
           <div className="relative h-auto w-64 overflow-hidden rounded-xl shadow-2xl shadow-black/50">
-            {card.media.image_url ? (
+            {card.media?.image_url ? (
               <Image
                 src={card.media.image_url}
-                alt={card.media.accessibility_text || card.name}
+                alt={card.media?.accessibility_text || card.name}
                 width={256}
                 height={358}
                 className="w-full object-cover"
@@ -114,7 +114,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
                   {card.classification.supertype}
                 </span>
               )}
-              {card.classification.domain.map((d) => (
+              {(card.classification.domain ?? []).map((d) => (
                 <span
                   key={d}
                   className="rounded bg-amber-900/30 px-1.5 py-0.5 text-xs text-amber-300"
@@ -146,9 +146,9 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
           )}
 
           {/* Tags */}
-          {card.tags.length > 0 && (
+          {(card.tags ?? []).length > 0 && (
             <div className="flex flex-wrap gap-1.5">
-              {card.tags.map((tag) => (
+              {(card.tags ?? []).map((tag) => (
                 <span
                   key={tag}
                   className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400"
