@@ -130,6 +130,26 @@ export function useDecks() {
     setDecks([...getDecks()])
   }, [])
 
+  /** Toggle a battlefield in/out of the deck's 3-slot battlefield list. */
+  const toggleBattlefield = useCallback((deckId: string, battlefieldId: string) => {
+    const deck = getDeck(deckId)
+    if (!deck) return
+    const current = deck.battlefieldIds ?? []
+    const next = current.includes(battlefieldId)
+      ? current.filter((id) => id !== battlefieldId)
+      : current.length < 3 ? [...current, battlefieldId] : current // max 3
+    saveDeck({ ...deck, battlefieldIds: next, updatedAt: new Date().toISOString() })
+    setDecks([...getDecks()])
+  }, [])
+
+  /** Set rune counts per domain. Total across all domains should be 12. */
+  const setDeckRunes = useCallback((deckId: string, runes: Record<string, number>) => {
+    const deck = getDeck(deckId)
+    if (!deck) return
+    saveDeck({ ...deck, runes, updatedAt: new Date().toISOString() })
+    setDecks([...getDecks()])
+  }, [])
+
   return {
     decks,
     createDeck,
@@ -142,5 +162,7 @@ export function useDecks() {
     addCardToMaybeboard,
     removeCardFromMaybeboard,
     setDeckLegend,
+    toggleBattlefield,
+    setDeckRunes,
   }
 }

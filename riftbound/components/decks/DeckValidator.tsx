@@ -13,6 +13,9 @@ export interface DeckEntry {
   quantity: number
 }
 
+const TOTAL_RUNES = 12
+const MAX_BATTLEFIELDS = 3
+
 interface ValidationResult {
   violations: { level: 'error' | 'warning'; message: string }[]
   isLegal: boolean
@@ -21,7 +24,9 @@ interface ValidationResult {
 export function validateDeck(
   mainEntries: DeckEntry[],
   sideEntries: DeckEntry[],
-  legendCard: Card | null
+  legendCard: Card | null,
+  battlefieldIds: string[],
+  runes: Record<string, number>
 ): ValidationResult {
   const violations: ValidationResult['violations'] = []
 
@@ -84,6 +89,25 @@ export function validateDeck(
     }
   }
 
+  // 6. Battlefields: exactly 3
+  if (battlefieldIds.length !== MAX_BATTLEFIELDS) {
+    violations.push({
+      level: 'warning',
+      message: `Battlefields: ${battlefieldIds.length} / ${MAX_BATTLEFIELDS} selected`,
+    })
+  }
+
+  // 7. Rune deck: total must be 12
+  if (legendCard) {
+    const runeTotal = Object.values(runes).reduce((s, n) => s + n, 0)
+    if (runeTotal !== TOTAL_RUNES) {
+      violations.push({
+        level: 'warning',
+        message: `Rune deck has ${runeTotal} rune${runeTotal !== 1 ? 's' : ''} — must be ${TOTAL_RUNES}`,
+      })
+    }
+  }
+
   return {
     violations,
     isLegal: violations.every((v) => v.level !== 'error'),
@@ -94,10 +118,12 @@ interface DeckValidatorProps {
   mainEntries: DeckEntry[]
   sideEntries: DeckEntry[]
   legendCard: Card | null
+  battlefieldIds: string[]
+  runes: Record<string, number>
 }
 
-export default function DeckValidator({ mainEntries, sideEntries, legendCard }: DeckValidatorProps) {
-  const { violations } = validateDeck(mainEntries, sideEntries, legendCard)
+export default function DeckValidator({ mainEntries, sideEntries, legendCard, battlefieldIds, runes }: DeckValidatorProps) {
+  const { violations } = validateDeck(mainEntries, sideEntries, legendCard, battlefieldIds, runes)
   const totalMain = mainEntries.reduce((s, e) => s + e.quantity, 0)
   const totalSide = sideEntries.reduce((s, e) => s + e.quantity, 0)
 

@@ -103,7 +103,10 @@ export interface Deck {
   /** Maybeboard — scratchpad with no copy/size limits */
   maybeboard?: DeckCard[]
   legendId?: string
+  /** Up to 3 distinct Battlefield card IDs */
   battlefieldIds?: string[]
+  /** Rune counts keyed by domain name, e.g. { Fury: 6, Order: 6 }. Total should be 12. */
+  runes?: Record<string, number>
   createdAt: string
   updatedAt: string
 }
