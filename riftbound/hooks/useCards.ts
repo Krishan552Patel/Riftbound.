@@ -16,8 +16,8 @@ function buildQuery(params: CardQueryParams): string {
   return q.toString()
 }
 
-export function useCards(params: CardQueryParams) {
-  const key = `/api/cards?${buildQuery(params)}`
+export function useCards(params: CardQueryParams | null) {
+  const key = params ? `/api/cards?${buildQuery(params)}` : null
   return useSWR<PaginatedCards>(key, {
     keepPreviousData: true,
     revalidateOnFocus: false,

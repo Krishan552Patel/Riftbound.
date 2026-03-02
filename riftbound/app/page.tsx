@@ -1,33 +1,57 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useCards } from '@/hooks/useCards'
-import { useCardSearch } from '@/hooks/useCardSearch'
+import { useAllCards } from '@/hooks/useAllCards'
 import { useCollection } from '@/hooks/useCollection'
+import { filterCards, isFilterActive, getFilterOptions } from '@/lib/cardFilter'
 import CardGrid, { CardGridSkeleton } from '@/components/cards/CardGrid'
 import SearchBar from '@/components/cards/SearchBar'
-import FilterPanel from '@/components/cards/FilterPanel'
-import type { CardQueryParams } from '@/types'
+import FilterPanel, { type PanelFilters } from '@/components/cards/FilterPanel'
 
 const PAGE_SIZE = 24
 
 export default function HomePage() {
   const [query, setQuery] = useState('')
-  const [filters, setFilters] = useState<Partial<CardQueryParams>>({ size: PAGE_SIZE, page: 1 })
-  const [searchPage, setSearchPage] = useState(1)
+  const [filters, setFilters] = useState<PanelFilters>({})
+  const [page, setPage] = useState(1)
   const { collection } = useCollection()
 
-  // Only enter search mode once the query meets the 2-char server minimum
-  const isSearching = query.trim().length >= 2
+  const activeFilters = { ...filters, query: query || undefined }
+  const inFilterMode = isFilterActive(activeFilters)
 
+  // All cards — always fetched so dropdowns populate and filter mode works
+  const { data: allCards, isLoading: allCardsLoading } = useAllCards()
+
+  // Server-side browse (disabled in filter mode)
   const { data: browseData, isLoading: browseLoading } = useCards(
-    isSearching ? { size: 0, page: 1 } : { ...filters, size: PAGE_SIZE }
+    inFilterMode ? null : { size: PAGE_SIZE, page, sort: filters.sort, dir: filters.dir }
   )
-  const { data: searchData, isLoading: searchLoading, isValidating: searchValidating } = useCardSearch(query, searchPage)
 
-  const data = isSearching ? searchData : browseData
-  const isLoading = isSearching ? searchLoading : browseLoading
+  // Dropdown options derived from all loaded cards
+  const filterOptions = useMemo(
+    () => (allCards ? getFilterOptions(allCards) : undefined),
+    [allCards]
+  )
+
+  // Client-side filtered results
+  const filteredCards = useMemo(() => {
+    if (!inFilterMode || !allCards) return []
+    return filterCards(allCards, activeFilters)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inFilterMode, allCards, query, filters.type, filters.rarity, filters.domain, filters.set])
+
+  const totalPages = inFilterMode
+    ? Math.max(1, Math.ceil(filteredCards.length / PAGE_SIZE))
+    : (browseData?.pages ?? 1)
+
+  const displayItems = inFilterMode
+    ? filteredCards.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : (browseData?.items ?? [])
+
+  const totalCount = inFilterMode ? filteredCards.length : (browseData?.total ?? 0)
+  const isLoading = inFilterMode ? (allCardsLoading && !allCards) : browseLoading
 
   const ownedMap = Object.fromEntries(
     Object.entries(collection).map(([id, e]) => [id, e.quantity])
@@ -35,66 +59,56 @@ export default function HomePage() {
 
   const handleSearch = useCallback((q: string) => {
     setQuery(q)
-    setSearchPage(1)
-    setFilters((f) => ({ ...f, page: 1 }))
+    setPage(1)
   }, [])
 
-  const totalPages = data?.pages ?? 1
-  const currentPage = isSearching ? searchPage : (filters.page ?? 1)
+  const handleFiltersChange = useCallback((f: PanelFilters) => {
+    setFilters(f)
+    setPage(1)
+  }, [])
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3">
         <h1 className="text-2xl font-bold text-white">Card Browser</h1>
-        <SearchBar
-          onSearch={handleSearch}
-          isLoading={isSearching && searchValidating}
-        />
+        <SearchBar onSearch={handleSearch} isLoading={false} />
       </div>
 
-      {!isSearching && (
-        <FilterPanel
-          filters={filters}
-          onChange={setFilters}
-        />
-      )}
+      <FilterPanel
+        filters={filters}
+        onChange={handleFiltersChange}
+        options={filterOptions}
+        showSort={!inFilterMode}
+      />
 
       {isLoading ? (
         <CardGridSkeleton count={PAGE_SIZE} />
       ) : (
         <>
-          {data && (
-            <p className="text-sm text-zinc-500">
-              {isSearching
-                ? `${data.total} result${data.total !== 1 ? 's' : ''} for "${query}"`
-                : `${data.total} cards total`}
-            </p>
-          )}
-          <CardGrid cards={data?.items ?? []} ownedMap={ownedMap} />
+          <p className="text-sm text-zinc-500">
+            {inFilterMode
+              ? `${totalCount} result${totalCount !== 1 ? 's' : ''}${query ? ` for "${query}"` : ''}`
+              : `${totalCount} cards total`}
+          </p>
+          <CardGrid cards={displayItems} ownedMap={ownedMap} />
         </>
       )}
 
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-3 pt-2">
           <button
-            disabled={currentPage <= 1}
-            onClick={() => isSearching
-              ? setSearchPage((p) => p - 1)
-              : setFilters((f) => ({ ...f, page: (f.page ?? 1) - 1 }))
-            }
+            disabled={page <= 1}
+            onClick={() => setPage((p) => p - 1)}
             className="flex items-center gap-1 rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             <ChevronLeft className="h-4 w-4" /> Prev
           </button>
           <span className="text-sm text-zinc-400">
-            Page {currentPage} of {totalPages}
+            Page {page} of {totalPages}
           </span>
           <button
-            disabled={currentPage >= totalPages}
-            onClick={() => isSearching
-              ? setSearchPage((p) => p + 1)
-              : setFilters((f) => ({ ...f, page: (f.page ?? 1) + 1 }))
-            }
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
             className="flex items-center gap-1 rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             Next <ChevronRight className="h-4 w-4" />
