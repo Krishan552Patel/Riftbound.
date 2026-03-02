@@ -7,7 +7,8 @@ import { ArrowLeft, Plus, Minus, BookOpen } from 'lucide-react'
 import { useCard } from '@/hooks/useCard'
 import { useCollection } from '@/hooks/useCollection'
 import { useDecks } from '@/hooks/useDecks'
-import { getCardPrice, formatPrice } from '@/lib/pricing'
+import { formatPrice } from '@/lib/pricing'
+import { useCardPrice } from '@/hooks/useCardPrice'
 import RarityBadge from '@/components/cards/RarityBadge'
 
 export default function CardDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -16,6 +17,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
   const { getEntry, updateCard, removeCard } = useCollection()
   const { decks, addCardToDeck } = useDecks()
   const [selectedDeck, setSelectedDeck] = useState('')
+  const price = useCardPrice(card)
 
   if (isLoading) {
     return (
@@ -44,7 +46,6 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
     )
   }
 
-  const price = getCardPrice(card)
   const entry = getEntry(card.id)
   const qty = entry?.quantity ?? 0
   const foilQty = entry?.foilQuantity ?? 0
@@ -171,14 +172,14 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
             <div className="mb-2 flex items-center justify-between">
               <h2 className="font-semibold text-white">Price</h2>
               <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-500">
-                Placeholder
+                {price?.source === 'tcgcsv' ? 'TCGPlayer' : 'Placeholder'}
               </span>
             </div>
             <div className="grid grid-cols-4 gap-3 text-center text-sm">
-              <PriceStat label="Market" value={formatPrice(price.market)} highlight />
-              <PriceStat label="Low" value={formatPrice(price.low)} />
-              <PriceStat label="High" value={formatPrice(price.high)} />
-              <PriceStat label="Foil" value={formatPrice(price.foil)} />
+              <PriceStat label="Market" value={price ? formatPrice(price.market) : '—'} highlight />
+              <PriceStat label="Low" value={price ? formatPrice(price.low) : '—'} />
+              <PriceStat label="High" value={price ? formatPrice(price.high) : '—'} />
+              <PriceStat label="Foil" value={price ? formatPrice(price.foil) : '—'} />
             </div>
           </div>
 
@@ -198,7 +199,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
             {(qty > 0 || foilQty > 0) && (
               <p className="text-xs text-emerald-400">
                 Owned: {qty} normal{foilQty > 0 ? `, ${foilQty} foil` : ''} ·{' '}
-                Est. value {formatPrice(price.market * qty + price.foil * foilQty)}
+                Est. value {price ? formatPrice(price.market * qty + price.foil * foilQty) : '—'}
               </p>
             )}
           </div>

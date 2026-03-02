@@ -3,7 +3,8 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { getCardPrice, formatPrice } from '@/lib/pricing'
+import { formatPrice } from '@/lib/pricing'
+import { useCardPrice } from '@/hooks/useCardPrice'
 import type { Card } from '@/types'
 import RarityBadge from './RarityBadge'
 
@@ -15,7 +16,7 @@ interface CardTileProps {
 }
 
 export default function CardTile({ card, ownedQty, compact, onAddToDeck }: CardTileProps) {
-  const price = getCardPrice(card)
+  const price = useCardPrice(card)
 
   return (
     <div
@@ -49,7 +50,7 @@ export default function CardTile({ card, ownedQty, compact, onAddToDeck }: CardT
           <p className="truncate font-semibold text-zinc-100">{card.name}</p>
           <div className="mt-1 flex items-center justify-between gap-1">
             <RarityBadge rarity={card.classification?.rarity ?? ''} />
-            <span className="font-mono text-amber-400">{formatPrice(price.market)}</span>
+            <span className="font-mono text-amber-400">{price ? formatPrice(price.market) : '—'}</span>
           </div>
           <p className="mt-1 truncate text-zinc-500">{card.classification?.type}</p>
         </div>

@@ -72,7 +72,7 @@ export interface CardPrice {
   low: number
   high: number
   foil: number
-  source: 'placeholder' | 'shopify'
+  source: 'placeholder' | 'shopify' | 'tcgcsv'
   lastUpdated: string
 }
 

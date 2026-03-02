@@ -27,7 +27,7 @@ function hashString(s: string): number {
  * Exported for synchronous use in components that can't await.
  */
 export function getCardPrice(card: Card): CardPrice {
-  const [lo, hi] = RARITY_RANGES[card.classification.rarity] ?? [0.10, 1.00]
+  const [lo, hi] = RARITY_RANGES[card.classification?.rarity ?? ''] ?? [0.10, 1.00]
   const h = hashString(card.id)
   const market = +(lo + h * (hi - lo)).toFixed(2)
   return {
