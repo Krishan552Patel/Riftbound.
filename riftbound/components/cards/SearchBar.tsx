@@ -1,18 +1,20 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Search, X } from 'lucide-react'
+import { Search, X, Loader2 } from 'lucide-react'
 
 interface SearchBarProps {
   onSearch: (query: string) => void
   placeholder?: string
   debounceMs?: number
+  isLoading?: boolean
 }
 
 export default function SearchBar({
   onSearch,
   placeholder = 'Search cards…',
   debounceMs = 300,
+  isLoading = false,
 }: SearchBarProps) {
   const [value, setValue] = useState('')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -25,7 +27,11 @@ export default function SearchBar({
 
   return (
     <div className="relative">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+      {isLoading ? (
+        <Loader2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-amber-400 animate-spin" />
+      ) : (
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+      )}
       <input
         type="text"
         value={value}

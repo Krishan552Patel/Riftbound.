@@ -4,7 +4,8 @@ import type { PaginatedCards } from '@/types'
 
 export async function GET(req: NextRequest) {
   const query = req.nextUrl.searchParams.get('query') ?? ''
-  const size = req.nextUrl.searchParams.get('size') ?? '50'
+  const size = req.nextUrl.searchParams.get('size') ?? '24'
+  const page = req.nextUrl.searchParams.get('page') ?? '1'
 
   if (query.trim().length < 2) {
     return NextResponse.json({ items: [], total: 0, page: 1, size: 0, pages: 0 })
@@ -12,7 +13,8 @@ export async function GET(req: NextRequest) {
 
   const upstream = new URLSearchParams({
     query: query.trim(),
-    size: String(Math.min(100, Math.max(1, parseInt(size) || 50))),
+    size: String(Math.min(100, Math.max(1, parseInt(size) || 24))),
+    page: String(Math.max(1, parseInt(page) || 1)),
   })
 
   try {
