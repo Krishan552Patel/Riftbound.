@@ -95,9 +95,11 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             )}
           </div>
-          <p className="mt-2 text-center text-xs text-zinc-500">
-            Art by {card.media.artist}
-          </p>
+          {card.media?.artist && (
+            <p className="mt-2 text-center text-xs text-zinc-500">
+              Art by {card.media.artist}
+            </p>
+          )}
         </div>
 
         {/* Card info */}
@@ -107,14 +109,14 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
               <h1 className="text-3xl font-bold text-white">{card.name}</h1>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <RarityBadge rarity={card.classification.rarity} />
-              <span className="text-sm text-zinc-400">{card.classification.type}</span>
-              {card.classification.supertype && (
+              <RarityBadge rarity={card.classification?.rarity ?? ''} />
+              <span className="text-sm text-zinc-400">{card.classification?.type}</span>
+              {card.classification?.supertype && (
                 <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs text-zinc-400">
                   {card.classification.supertype}
                 </span>
               )}
-              {(card.classification.domain ?? []).map((d) => (
+              {(card.classification?.domain ?? []).map((d) => (
                 <span
                   key={d}
                   className="rounded bg-amber-900/30 px-1.5 py-0.5 text-xs text-amber-300"
@@ -127,19 +129,19 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* Stats */}
           <div className="flex gap-4">
-            {card.attributes.energy !== null && (
+            {card.attributes?.energy != null && (
               <Stat label="Energy" value={card.attributes.energy} />
             )}
-            {card.attributes.might !== null && (
+            {card.attributes?.might != null && (
               <Stat label="Might" value={card.attributes.might} />
             )}
-            {card.attributes.power !== null && (
+            {card.attributes?.power != null && (
               <Stat label="Power" value={card.attributes.power} />
             )}
           </div>
 
           {/* Card text */}
-          {card.text.plain && (
+          {card.text?.plain && (
             <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
               <p className="text-sm leading-relaxed text-zinc-300">{card.text.plain}</p>
             </div>
@@ -161,7 +163,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* Set info */}
           <p className="text-sm text-zinc-500">
-            {card.set.label} · {card.public_code}
+            {card.set?.label} · {card.public_code}
           </p>
 
           {/* Pricing */}

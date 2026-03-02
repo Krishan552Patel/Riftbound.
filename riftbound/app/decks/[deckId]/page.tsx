@@ -179,7 +179,7 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
                     key={dc.cardId}
                     className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900/50 px-2 py-1.5"
                   >
-                    {card?.media.image_url && (
+                    {card?.media?.image_url && (
                       <div className="relative h-8 w-6 flex-shrink-0 overflow-hidden rounded">
                         <Image
                           src={card.media.image_url}

@@ -61,7 +61,7 @@ export default function CollectionTable({
               >
                 <td className="px-3 py-2">
                   <Link href={`/cards/${card.id}`} className="flex items-center gap-2 hover:text-amber-400 transition-colors">
-                    {card.media.image_url && (
+                    {card.media?.image_url && (
                       <div className="relative h-10 w-7 flex-shrink-0 overflow-hidden rounded">
                         <Image
                           src={card.media.image_url}

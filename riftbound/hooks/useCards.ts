@@ -3,8 +3,6 @@
 import useSWR from 'swr'
 import type { CardQueryParams, PaginatedCards } from '@/types'
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
-
 function buildQuery(params: CardQueryParams): string {
   const q = new URLSearchParams()
   if (params.page) q.set('page', String(params.page))
@@ -20,7 +18,7 @@ function buildQuery(params: CardQueryParams): string {
 
 export function useCards(params: CardQueryParams) {
   const key = `/api/cards?${buildQuery(params)}`
-  return useSWR<PaginatedCards>(key, fetcher, {
+  return useSWR<PaginatedCards>(key, {
     keepPreviousData: true,
     revalidateOnFocus: false,
   })

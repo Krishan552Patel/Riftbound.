@@ -48,10 +48,10 @@ export default function CardTile({ card, ownedQty, compact, onAddToDeck }: CardT
         <div className="p-2">
           <p className="truncate font-semibold text-zinc-100">{card.name}</p>
           <div className="mt-1 flex items-center justify-between gap-1">
-            <RarityBadge rarity={card.classification.rarity} />
+            <RarityBadge rarity={card.classification?.rarity ?? ''} />
             <span className="font-mono text-amber-400">{formatPrice(price.market)}</span>
           </div>
-          <p className="mt-1 truncate text-zinc-500">{card.classification.type}</p>
+          <p className="mt-1 truncate text-zinc-500">{card.classification?.type}</p>
         </div>
       </Link>
       {onAddToDeck && (

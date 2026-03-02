@@ -3,10 +3,8 @@
 import useSWR from 'swr'
 import type { SetInfo } from '@/types'
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json())
-
 export function useSets() {
-  return useSWR<SetInfo[]>('/api/sets', fetcher, {
+  return useSWR<SetInfo[]>('/api/sets', {
     revalidateOnFocus: false,
     dedupingInterval: 86400 * 1000,
   })
