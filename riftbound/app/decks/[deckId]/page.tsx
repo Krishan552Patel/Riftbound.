@@ -14,13 +14,15 @@ import SearchBar from '@/components/cards/SearchBar'
 import RarityBadge from '@/components/cards/RarityBadge'
 import BuilderCardTile, { type CardDisabledReason } from '@/components/decks/BuilderCardTile'
 import DeckStats from '@/components/decks/DeckStats'
-import DeckValidator from '@/components/decks/DeckValidator'
+import DeckValidator, { MAIN_DECK_TYPES, type DeckEntry } from '@/components/decks/DeckValidator'
 import { CardGridSkeleton } from '@/components/cards/CardGrid'
 import type { Card } from '@/types'
 
 const BUILDER_PAGE_SIZE = 40
-const MAIN_DECK_TYPES = new Set(['Unit', 'Gear', 'Spell'])
 const MAX_COPIES = 3
+const SIDEBOARD_SIZE = 8
+
+type DeckSection = 'main' | 'sideboard' | 'maybeboard'
 
 const TYPE_ORDER = ['Champion', 'Unit', 'Gear', 'Spell', 'Equipment', 'Location']
 function typeSort(a: string, b: string) {
@@ -32,31 +34,25 @@ function typeSort(a: string, b: string) {
   return a.localeCompare(b)
 }
 
-function getDisabledReason(
-  card: Card,
-  deckQtyMap: Record<string, number>,
-  legendDomains: Set<string>
-): CardDisabledReason | undefined {
-  const type = card.classification?.type ?? ''
-  // Block Legends and Battlefields from main deck
-  if (!MAIN_DECK_TYPES.has(type)) return 'type'
-  // 3-copy limit
-  if ((deckQtyMap[card.id] ?? 0) >= MAX_COPIES) return 'limit'
-  // Domain check (only when legend is selected)
-  if (legendDomains.size > 0) {
-    const domains = card.classification?.domain ?? []
-    const isNeutral = domains.length === 0
-    const matchesDomain = domains.some((d) => legendDomains.has(d))
-    if (!isNeutral && !matchesDomain) return 'domain'
+function groupByType(entries: DeckEntry[]) {
+  const groups = new Map<string, DeckEntry[]>()
+  for (const entry of entries) {
+    const type = entry.card.classification?.type ?? 'Other'
+    if (!groups.has(type)) groups.set(type, [])
+    groups.get(type)!.push(entry)
   }
-  return undefined
+  return [...groups.entries()].sort(([a], [b]) => typeSort(a, b))
 }
 
 export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: string }> }) {
   const { deckId } = use(params)
-  const { decks, updateDeck, removeDeck, addCardToDeck, removeCardFromDeck, setDeckLegend } = useDecks()
+  const {
+    decks, updateDeck, removeDeck, setDeckLegend,
+    addCardToDeck, removeCardFromDeck,
+    addCardToSideboard, removeCardFromSideboard,
+    addCardToMaybeboard, removeCardFromMaybeboard,
+  } = useDecks()
   const router = useRouter()
-
   const deck = decks.find((d) => d.id === deckId)
 
   const [query, setQuery] = useState('')
@@ -66,6 +62,7 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
   const [editingName, setEditingName] = useState(false)
   const [copied, setCopied] = useState(false)
   const [showLegendPicker, setShowLegendPicker] = useState(false)
+  const [activeSection, setActiveSection] = useState<DeckSection>('main')
 
   const { data: allCards, isLoading: allCardsLoading } = useAllCards()
 
@@ -74,28 +71,19 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
     return new Map(allCards.map((c) => [c.id, c]))
   }, [allCards])
 
-  // All Legend cards, sorted by name
   const legendCards = useMemo(
     () => (allCards ?? []).filter((c) => c.classification?.type === 'Legend').sort((a, b) => a.name.localeCompare(b.name)),
     [allCards]
   )
 
   const legendCard = deck?.legendId ? (allCardsMap.get(deck.legendId) ?? null) : null
-  const legendDomains = useMemo(
-    () => new Set(legendCard?.classification?.domain ?? []),
-    [legendCard]
-  )
+  const legendDomains = useMemo(() => new Set(legendCard?.classification?.domain ?? []), [legendCard])
 
-  const filterOptions = useMemo(
-    () => (allCards ? getFilterOptions(allCards) : undefined),
-    [allCards]
-  )
-
+  const filterOptions = useMemo(() => (allCards ? getFilterOptions(allCards) : undefined), [allCards])
   const activeFilters = { ...filters, query: query || undefined }
   const inFilterMode = isFilterActive(activeFilters)
 
-  // For the browser, show main-deck-eligible cards only (Units, Gear, Spells)
-  // Legends and Battlefields are excluded from the main browser
+  // Browser only shows main-deck-eligible cards
   const browseableCards = useMemo(
     () => (allCards ?? []).filter((c) => MAIN_DECK_TYPES.has(c.classification?.type ?? '')),
     [allCards]
@@ -108,42 +96,63 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
   }, [browseableCards, inFilterMode, query, filters.type, filters.rarity, filters.domain, filters.set])
 
   const totalCardPages = Math.max(1, Math.ceil(filteredCards.length / BUILDER_PAGE_SIZE))
-  const pagedCards = filteredCards.slice(
-    (cardPage - 1) * BUILDER_PAGE_SIZE,
-    cardPage * BUILDER_PAGE_SIZE
-  )
+  const pagedCards = filteredCards.slice((cardPage - 1) * BUILDER_PAGE_SIZE, cardPage * BUILDER_PAGE_SIZE)
 
-  const deckQtyMap = useMemo(() => {
+  // Combined qty (main + sideboard) used for limit badges and disabled state
+  const combinedQtyMap = useMemo(() => {
     if (!deck) return {} as Record<string, number>
-    return Object.fromEntries(deck.cards.map((c) => [c.cardId, c.quantity]))
+    const map: Record<string, number> = {}
+    for (const c of deck.cards) map[c.cardId] = (map[c.cardId] ?? 0) + c.quantity
+    for (const c of deck.sideboard ?? []) map[c.cardId] = (map[c.cardId] ?? 0) + c.quantity
+    return map
   }, [deck])
 
-  const deckEntries = useMemo(() => {
-    if (!deck) return []
-    return deck.cards
-      .map((dc) => ({ card: allCardsMap.get(dc.cardId), quantity: dc.quantity }))
-      .filter((e): e is { card: Card; quantity: number } => !!e.card)
-  }, [deck, allCardsMap])
-
-  const groupedDeck = useMemo(() => {
-    const groups = new Map<string, typeof deckEntries>()
-    for (const entry of deckEntries) {
-      const type = entry.card.classification?.type ?? 'Other'
-      if (!groups.has(type)) groups.set(type, [])
-      groups.get(type)!.push(entry)
-    }
-    return [...groups.entries()].sort(([a], [b]) => typeSort(a, b))
-  }, [deckEntries])
-
-  const deckValue = useMemo(
-    () => deckEntries.reduce((sum, { card, quantity }) => sum + getCardPrice(card).market * quantity, 0),
-    [deckEntries]
+  const sideTotal = useMemo(
+    () => (deck?.sideboard ?? []).reduce((s, c) => s + c.quantity, 0),
+    [deck]
   )
 
-  const totalCards = deck?.cards.reduce((s, c) => s + c.quantity, 0) ?? 0
+  function getDisabledReason(card: Card): CardDisabledReason | undefined {
+    if (activeSection === 'maybeboard') return undefined // no limits on maybeboard
+    const combined = combinedQtyMap[card.id] ?? 0
+    if (combined >= MAX_COPIES) return 'limit'
+    if (activeSection === 'sideboard' && sideTotal >= SIDEBOARD_SIZE) return 'limit'
+    if (legendDomains.size > 0 && activeSection !== 'maybeboard') {
+      const domains = card.classification?.domain ?? []
+      if (domains.length > 0 && !domains.some((d) => legendDomains.has(d))) return 'domain'
+    }
+    return undefined
+  }
 
-  const handleSearch = useCallback((q: string) => { setQuery(q); setCardPage(1) }, [])
-  const handleFiltersChange = useCallback((f: PanelFilters) => { setFilters(f); setCardPage(1) }, [])
+  function handleAddCard(card: Card) {
+    if (!deck) return
+    if (activeSection === 'main') addCardToDeck(deck.id, card.id)
+    else if (activeSection === 'sideboard') addCardToSideboard(deck.id, card.id)
+    else addCardToMaybeboard(deck.id, card.id)
+  }
+
+  // Resolved entries for each section
+  function resolveEntries(list: { cardId: string; quantity: number }[] | undefined): DeckEntry[] {
+    return (list ?? [])
+      .map((dc) => ({ card: allCardsMap.get(dc.cardId), quantity: dc.quantity }))
+      .filter((e): e is DeckEntry => !!e.card)
+  }
+
+  const mainEntries = useMemo(() => resolveEntries(deck?.cards), [deck?.cards, allCardsMap])
+  const sideEntries = useMemo(() => resolveEntries(deck?.sideboard), [deck?.sideboard, allCardsMap])
+  const maybeEntries = useMemo(() => resolveEntries(deck?.maybeboard), [deck?.maybeboard, allCardsMap])
+
+  const groupedMain = useMemo(() => groupByType(mainEntries), [mainEntries])
+  const groupedSide = useMemo(() => groupByType(sideEntries), [sideEntries])
+  const groupedMaybe = useMemo(() => groupByType(maybeEntries), [maybeEntries])
+
+  const totalMainCards = mainEntries.reduce((s, e) => s + e.quantity, 0)
+  const totalCards = totalMainCards + sideTotal + maybeEntries.reduce((s, e) => s + e.quantity, 0)
+
+  const deckValue = useMemo(
+    () => [...mainEntries, ...sideEntries].reduce((sum, { card, quantity }) => sum + getCardPrice(card).market * quantity, 0),
+    [mainEntries, sideEntries]
+  )
 
   const handleSaveName = () => {
     if (!deck || !deckName.trim()) return
@@ -152,11 +161,26 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
   }
 
   const handleCopy = () => {
-    const lines = deckEntries.map(({ card, quantity }) => `${quantity}x ${card.name} (${card.public_code})`)
-    navigator.clipboard.writeText(lines.join('\n'))
+    const sections = [
+      { label: 'Main Deck', entries: mainEntries },
+      ...(sideEntries.length > 0 ? [{ label: 'Sideboard', entries: sideEntries }] : []),
+      ...(maybeEntries.length > 0 ? [{ label: 'Maybeboard', entries: maybeEntries }] : []),
+    ]
+    const lines = sections.flatMap(({ label, entries }) => [
+      `// ${label}`,
+      ...entries.map(({ card, quantity }) => `${quantity}x ${card.name} (${card.public_code})`),
+      '',
+    ])
+    navigator.clipboard.writeText(lines.join('\n').trim())
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
+
+  const isIllegalCard = useCallback((card: Card) => {
+    if (legendDomains.size === 0) return false
+    const domains = card.classification?.domain ?? []
+    return domains.length > 0 && !domains.some((d) => legendDomains.has(d))
+  }, [legendDomains])
 
   if (!deck) {
     return (
@@ -167,6 +191,12 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
     )
   }
 
+  const SECTION_TABS: { id: DeckSection; label: string; count: number }[] = [
+    { id: 'main', label: 'Main', count: totalMainCards },
+    { id: 'sideboard', label: `Side`, count: sideTotal },
+    { id: 'maybeboard', label: 'Maybe', count: maybeEntries.reduce((s, e) => s + e.quantity, 0) },
+  ]
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -174,13 +204,11 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
         <Link href="/decks" className="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors">
           <ArrowLeft className="h-4 w-4" /> Decks
         </Link>
-
         <div className="flex items-center gap-2 flex-1">
           {editingName ? (
             <>
               <input
-                type="text"
-                value={deckName}
+                type="text" value={deckName}
                 onChange={(e) => setDeckName(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleSaveName()
@@ -198,14 +226,9 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
             </button>
           )}
         </div>
-
         <span className="text-sm text-zinc-500">{totalCards} cards · {formatPrice(deckValue)} est.</span>
-
-        <button
-          onClick={() => { removeDeck(deck.id); router.push('/decks') }}
-          className="text-zinc-600 hover:text-red-400 transition-colors"
-          title="Delete deck"
-        >
+        <button onClick={() => { removeDeck(deck.id); router.push('/decks') }}
+          className="text-zinc-600 hover:text-red-400 transition-colors" title="Delete deck">
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
@@ -214,12 +237,40 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
 
         {/* ── Left: Card Browser ── */}
         <div className="space-y-3">
-          <SearchBar onSearch={handleSearch} placeholder="Search cards…" isLoading={false} />
-          <FilterPanel filters={filters} onChange={handleFiltersChange} options={filterOptions} showSort={false} />
+          {/* Section selector — determines where clicks go */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-zinc-500">Adding to:</span>
+            {SECTION_TABS.map(({ id, label, count }) => (
+              <button
+                key={id}
+                onClick={() => setActiveSection(id)}
+                className={[
+                  'rounded-full px-3 py-1 text-xs font-medium transition-colors',
+                  activeSection === id
+                    ? 'bg-amber-400 text-zinc-900'
+                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200',
+                ].join(' ')}
+              >
+                {label} <span className="opacity-70">{count}</span>
+              </button>
+            ))}
+          </div>
 
-          <p className="text-xs text-zinc-500">
-            {filteredCards.length} cards · click a card to add it to the deck
-          </p>
+          {activeSection === 'maybeboard' && (
+            <p className="text-xs text-zinc-500 italic">
+              Maybeboard has no copy or size limits — use it as a scratchpad.
+            </p>
+          )}
+          {activeSection === 'sideboard' && (
+            <p className="text-xs text-zinc-500">
+              Sideboard must be exactly 0 or 8 cards · {sideTotal}/{SIDEBOARD_SIZE} used
+            </p>
+          )}
+
+          <SearchBar onSearch={(q) => { setQuery(q); setCardPage(1) }} placeholder="Search cards…" isLoading={false} />
+          <FilterPanel filters={filters} onChange={(f) => { setFilters(f); setCardPage(1) }} options={filterOptions} showSort={false} />
+
+          <p className="text-xs text-zinc-500">{filteredCards.length} cards</p>
 
           {allCardsLoading ? (
             <CardGridSkeleton count={12} />
@@ -230,13 +281,12 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
                   <BuilderCardTile
                     key={card.id}
                     card={card}
-                    deckQty={deckQtyMap[card.id] ?? 0}
-                    onAdd={(c) => addCardToDeck(deck.id, c.id)}
-                    disabledReason={getDisabledReason(card, deckQtyMap, legendDomains)}
+                    deckQty={combinedQtyMap[card.id] ?? 0}
+                    onAdd={handleAddCard}
+                    disabledReason={getDisabledReason(card)}
                   />
                 ))}
               </div>
-
               {totalCardPages > 1 && (
                 <div className="flex items-center justify-center gap-3 pt-2">
                   <button disabled={cardPage <= 1} onClick={() => setCardPage((p) => p - 1)}
@@ -266,8 +316,6 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
               <span>Legend</span>
               <ChevronDown className={`h-4 w-4 text-zinc-400 transition-transform ${showLegendPicker ? 'rotate-180' : ''}`} />
             </button>
-
-            {/* Selected legend display */}
             {legendCard && (
               <div className="flex items-center gap-3 border-t border-zinc-800 px-3 py-2">
                 {legendCard.media?.image_url && (
@@ -279,140 +327,182 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
                   <p className="truncate text-sm font-medium text-white">{legendCard.name}</p>
                   <div className="mt-0.5 flex gap-1">
                     {(legendCard.classification?.domain ?? []).map((d) => (
-                      <span key={d} className="rounded-full bg-amber-900/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
-                        {d}
-                      </span>
+                      <span key={d} className="rounded-full bg-amber-900/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">{d}</span>
                     ))}
                   </div>
                 </div>
-                <button
-                  onClick={() => setDeckLegend(deck.id, null)}
-                  className="text-xs text-zinc-600 hover:text-red-400 transition-colors"
-                >
-                  ✕
-                </button>
+                <button onClick={() => setDeckLegend(deck.id, null)} className="text-xs text-zinc-600 hover:text-red-400 transition-colors">✕</button>
               </div>
             )}
-
-            {/* Legend picker dropdown */}
             {showLegendPicker && (
               <div className="border-t border-zinc-800 max-h-52 overflow-y-auto divide-y divide-zinc-800/50">
                 {legendCards.length === 0 ? (
                   <p className="px-3 py-3 text-xs text-zinc-500">Loading legends…</p>
-                ) : (
-                  legendCards.map((lc) => (
-                    <button
-                      key={lc.id}
-                      onClick={() => { setDeckLegend(deck.id, lc.id); setShowLegendPicker(false) }}
-                      className={[
-                        'flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-zinc-800/40 transition-colors',
-                        deck.legendId === lc.id ? 'bg-amber-900/20' : '',
-                      ].join(' ')}
-                    >
-                      {lc.media?.image_url && (
-                        <div className="relative h-8 w-6 flex-shrink-0 overflow-hidden rounded">
-                          <Image src={lc.media.image_url} alt={lc.name} fill sizes="24px" className="object-cover" />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="truncate text-xs font-medium text-zinc-100">{lc.name}</p>
-                        <div className="flex gap-1 mt-0.5">
-                          {(lc.classification?.domain ?? []).map((d) => (
-                            <span key={d} className="rounded bg-zinc-700 px-1 py-0.5 text-[9px] text-zinc-300">{d}</span>
-                          ))}
-                        </div>
+                ) : legendCards.map((lc) => (
+                  <button key={lc.id}
+                    onClick={() => { setDeckLegend(deck.id, lc.id); setShowLegendPicker(false) }}
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-zinc-800/40 transition-colors ${deck.legendId === lc.id ? 'bg-amber-900/20' : ''}`}
+                  >
+                    {lc.media?.image_url && (
+                      <div className="relative h-8 w-6 flex-shrink-0 overflow-hidden rounded">
+                        <Image src={lc.media.image_url} alt={lc.name} fill sizes="24px" className="object-cover" />
                       </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Validation */}
-          <DeckValidator entries={deckEntries} legendCard={legendCard} />
-
-          {/* Stats */}
-          <DeckStats entries={deckEntries} />
-
-          {/* Deck list */}
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-800">
-              <h2 className="text-sm font-semibold text-white">Deck List</h2>
-              <span className="text-xs text-zinc-500">{totalCards} cards</span>
-            </div>
-
-            {groupedDeck.length === 0 ? (
-              <p className="px-3 py-6 text-center text-sm text-zinc-500">
-                No cards yet — click cards on the left to add.
-              </p>
-            ) : (
-              <div className="divide-y divide-zinc-800/50 max-h-[40vh] overflow-y-auto">
-                {groupedDeck.map(([type, entries]) => (
-                  <div key={type}>
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800/40 sticky top-0">
-                      <span className="text-xs font-semibold text-zinc-300">{type}</span>
-                      <span className="text-xs text-zinc-600">({entries.reduce((s, e) => s + e.quantity, 0)})</span>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-xs font-medium text-zinc-100">{lc.name}</p>
+                      <div className="flex gap-1 mt-0.5">
+                        {(lc.classification?.domain ?? []).map((d) => (
+                          <span key={d} className="rounded bg-zinc-700 px-1 py-0.5 text-[9px] text-zinc-300">{d}</span>
+                        ))}
+                      </div>
                     </div>
-
-                    {entries.map(({ card, quantity }) => {
-                      const isIllegal = legendDomains.size > 0 && (() => {
-                        const domains = card.classification?.domain ?? []
-                        return domains.length > 0 && !domains.some((d) => legendDomains.has(d))
-                      })()
-                      return (
-                        <div
-                          key={card.id}
-                          className={`flex items-center gap-2 px-3 py-1.5 hover:bg-zinc-800/30 transition-colors ${isIllegal ? 'bg-red-950/20' : ''}`}
-                        >
-                          {card.media?.image_url && (
-                            <div className="relative h-8 w-6 flex-shrink-0 overflow-hidden rounded">
-                              <Image src={card.media.image_url} alt={card.name} fill sizes="24px" className="object-cover" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className={`truncate text-xs font-medium ${isIllegal ? 'text-red-300' : 'text-zinc-100'}`}>
-                              {card.name}
-                            </p>
-                            <RarityBadge rarity={card.classification?.rarity ?? ''} />
-                          </div>
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            <button onClick={() => removeCardFromDeck(deck.id, card.id)}
-                              className="flex h-5 w-5 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700 hover:text-white transition-colors">
-                              <Minus className="h-3 w-3" />
-                            </button>
-                            <span className={`w-4 text-center text-xs font-bold ${quantity >= MAX_COPIES ? 'text-zinc-400' : 'text-amber-400'}`}>
-                              {quantity}
-                            </span>
-                            <button
-                              onClick={() => addCardToDeck(deck.id, card.id)}
-                              disabled={quantity >= MAX_COPIES}
-                              className="flex h-5 w-5 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                            >
-                              <Plus className="h-3 w-3" />
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
+          </div>
 
-            {deckEntries.length > 0 && (
-              <div className="border-t border-zinc-800 px-3 py-2">
-                <button
-                  onClick={handleCopy}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-md border border-zinc-700 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
-                >
-                  {copied ? <><Check className="h-3 w-3 text-emerald-400" /> Copied!</> : <><Copy className="h-3 w-3" /> Copy deck list</>}
+          {/* Validator */}
+          <DeckValidator mainEntries={mainEntries} sideEntries={sideEntries} legendCard={legendCard} />
+
+          {/* Stats (main deck only) */}
+          <DeckStats entries={mainEntries} />
+
+          {/* Deck list */}
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-800">
+              <h2 className="text-sm font-semibold text-white">Deck List</h2>
+              {mainEntries.length > 0 && (
+                <button onClick={handleCopy}
+                  className="flex items-center gap-1 text-xs text-zinc-500 hover:text-white transition-colors">
+                  {copied ? <><Check className="h-3 w-3 text-emerald-400" /> Copied</> : <><Copy className="h-3 w-3" /> Copy</>}
                 </button>
-              </div>
-            )}
+              )}
+            </div>
+
+            <div className="max-h-[50vh] overflow-y-auto">
+              {/* ── Main Deck ── */}
+              <SectionHeader label="Main Deck" count={totalMainCards} />
+              {groupedMain.length === 0
+                ? <EmptySection message="Click cards on the left to add." />
+                : groupedMain.map(([type, entries]) => (
+                  <TypeGroup key={type} type={type} entries={entries} legendDomains={legendDomains}
+                    onAdd={(id) => addCardToDeck(deck.id, id)}
+                    onRemove={(id) => removeCardFromDeck(deck.id, id)}
+                    maxCopies={MAX_COPIES} combinedQtyMap={combinedQtyMap}
+                  />
+                ))
+              }
+
+              {/* ── Sideboard ── */}
+              <SectionHeader
+                label="Sideboard"
+                count={sideTotal}
+                sublabel={sideTotal > 0 && sideTotal !== SIDEBOARD_SIZE ? `(${sideTotal}/${SIDEBOARD_SIZE} — must be 0 or 8)` : `(${sideTotal}/${SIDEBOARD_SIZE})`}
+                warn={sideTotal > 0 && sideTotal !== SIDEBOARD_SIZE}
+              />
+              {groupedSide.length === 0
+                ? <EmptySection message={`Select 'Side' above, then click cards to add. Max ${SIDEBOARD_SIZE} cards.`} />
+                : groupedSide.map(([type, entries]) => (
+                  <TypeGroup key={type} type={type} entries={entries} legendDomains={legendDomains}
+                    onAdd={(id) => addCardToSideboard(deck.id, id)}
+                    onRemove={(id) => removeCardFromSideboard(deck.id, id)}
+                    maxCopies={MAX_COPIES} combinedQtyMap={combinedQtyMap}
+                  />
+                ))
+              }
+
+              {/* ── Maybeboard ── */}
+              <SectionHeader label="Maybeboard" count={maybeEntries.reduce((s, e) => s + e.quantity, 0)} sublabel="(no limits)" />
+              {groupedMaybe.length === 0
+                ? <EmptySection message="Select 'Maybe' above to add cards here." />
+                : groupedMaybe.map(([type, entries]) => (
+                  <TypeGroup key={type} type={type} entries={entries} legendDomains={new Set()}
+                    onAdd={(id) => addCardToMaybeboard(deck.id, id)}
+                    onRemove={(id) => removeCardFromMaybeboard(deck.id, id)}
+                    maxCopies={Infinity} combinedQtyMap={{}}
+                  />
+                ))
+              }
+            </div>
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function SectionHeader({ label, count, sublabel, warn }: {
+  label: string; count: number; sublabel?: string; warn?: boolean
+}) {
+  return (
+    <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800/60 border-t border-zinc-700/50">
+      <span className="text-xs font-bold text-zinc-200">{label}</span>
+      <span className={`text-xs ${warn ? 'text-amber-400' : 'text-zinc-500'}`}>
+        {sublabel ?? `(${count})`}
+      </span>
+    </div>
+  )
+}
+
+function EmptySection({ message }: { message: string }) {
+  return <p className="px-3 py-2 text-xs text-zinc-600 italic">{message}</p>
+}
+
+function TypeGroup({ type, entries, legendDomains, onAdd, onRemove, maxCopies, combinedQtyMap }: {
+  type: string
+  entries: DeckEntry[]
+  legendDomains: Set<string>
+  onAdd: (cardId: string) => void
+  onRemove: (cardId: string) => void
+  maxCopies: number
+  combinedQtyMap: Record<string, number>
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-2 px-3 py-1 bg-zinc-800/30 sticky top-0">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500">{type}</span>
+        <span className="text-[10px] text-zinc-700">({entries.reduce((s, e) => s + e.quantity, 0)})</span>
+      </div>
+      {entries.map(({ card, quantity }) => {
+        const isIllegal = legendDomains.size > 0 && (() => {
+          const domains = card.classification?.domain ?? []
+          return domains.length > 0 && !domains.some((d) => legendDomains.has(d))
+        })()
+        const combined = combinedQtyMap[card.id] ?? quantity
+        const atLimit = combined >= maxCopies
+
+        return (
+          <div key={card.id}
+            className={`flex items-center gap-2 px-3 py-1.5 hover:bg-zinc-800/30 transition-colors ${isIllegal ? 'bg-red-950/20' : ''}`}
+          >
+            {card.media?.image_url && (
+              <div className="relative h-8 w-6 flex-shrink-0 overflow-hidden rounded">
+                <Image src={card.media.image_url} alt={card.name} fill sizes="24px" className="object-cover" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className={`truncate text-xs font-medium ${isIllegal ? 'text-red-300' : 'text-zinc-100'}`}>{card.name}</p>
+              <RarityBadge rarity={card.classification?.rarity ?? ''} />
+            </div>
+            <div className="flex items-center gap-1 flex-shrink-0">
+              <button onClick={() => onRemove(card.id)}
+                className="flex h-5 w-5 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700 hover:text-white transition-colors">
+                <Minus className="h-3 w-3" />
+              </button>
+              <span className={`w-4 text-center text-xs font-bold ${atLimit ? 'text-zinc-400' : 'text-amber-400'}`}>
+                {quantity}
+              </span>
+              <button onClick={() => onAdd(card.id)} disabled={atLimit}
+                className="flex h-5 w-5 items-center justify-center rounded text-zinc-500 hover:bg-zinc-700 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
+                <Plus className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

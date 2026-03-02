@@ -96,7 +96,12 @@ export interface Deck {
   id: string
   name: string
   description: string
+  /** Main deck — min 40, max 3 copies of any card (combined with sideboard) */
   cards: DeckCard[]
+  /** Sideboard — exactly 0 or 8 cards, shares 3-copy limit with main deck */
+  sideboard?: DeckCard[]
+  /** Maybeboard — scratchpad with no copy/size limits */
+  maybeboard?: DeckCard[]
   legendId?: string
   battlefieldIds?: string[]
   createdAt: string
