@@ -57,5 +57,12 @@ export function useDecks() {
     setDecks([...updated])
   }, [])
 
-  return { decks, createDeck, updateDeck, removeDeck, addCardToDeck, removeCardFromDeck }
+  const setDeckLegend = useCallback((deckId: string, legendId: string | null) => {
+    const deck = getDeck(deckId)
+    if (!deck) return
+    const updated = saveDeck({ ...deck, legendId: legendId ?? undefined, updatedAt: new Date().toISOString() })
+    setDecks([...updated])
+  }, [])
+
+  return { decks, createDeck, updateDeck, removeDeck, addCardToDeck, removeCardFromDeck, setDeckLegend }
 }

@@ -97,6 +97,8 @@ export interface Deck {
   name: string
   description: string
   cards: DeckCard[]
+  legendId?: string
+  battlefieldIds?: string[]
   createdAt: string
   updatedAt: string
 }
