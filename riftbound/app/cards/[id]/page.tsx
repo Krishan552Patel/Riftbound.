@@ -10,6 +10,7 @@ import { useDecks } from '@/hooks/useDecks'
 import { formatPrice } from '@/lib/pricing'
 import { useCardPrice } from '@/hooks/useCardPrice'
 import RarityBadge from '@/components/cards/RarityBadge'
+import PriceComparisonTable from '@/components/cards/PriceComparisonTable'
 
 export default function CardDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
@@ -168,20 +169,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
           </p>
 
           {/* Pricing */}
-          <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="font-semibold text-white">Price</h2>
-              <span className="rounded bg-zinc-800 px-2 py-0.5 text-xs text-zinc-500">
-                {price?.source === 'tcgcsv' ? 'TCGPlayer' : 'Placeholder'}
-              </span>
-            </div>
-            <div className="grid grid-cols-4 gap-3 text-center text-sm">
-              <PriceStat label="Market" value={price ? formatPrice(price.market) : '—'} highlight />
-              <PriceStat label="Low" value={price ? formatPrice(price.low) : '—'} />
-              <PriceStat label="High" value={price ? formatPrice(price.high) : '—'} />
-              <PriceStat label="Foil" value={price ? formatPrice(price.foil) : '—'} />
-            </div>
-          </div>
+          <PriceComparisonTable card={card} tcgPrice={price} />
 
           {/* Collection tracker */}
           <div className="rounded-lg border border-zinc-800 bg-zinc-900/50 p-4 space-y-3">
@@ -250,14 +238,6 @@ function Stat({ label, value }: { label: string; value: number }) {
   )
 }
 
-function PriceStat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div>
-      <p className={highlight ? 'font-bold text-amber-400' : 'text-zinc-300'}>{value}</p>
-      <p className="text-xs text-zinc-500">{label}</p>
-    </div>
-  )
-}
 
 function QuantityStepper({ value, onChange }: { value: number; onChange: (delta: number) => void }) {
   return (
