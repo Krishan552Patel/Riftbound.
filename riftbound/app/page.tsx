@@ -5,7 +5,6 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useCards } from '@/hooks/useCards'
 import { useCardSearch } from '@/hooks/useCardSearch'
 import { useCollection } from '@/hooks/useCollection'
-import { useSets } from '@/hooks/useSets'
 import CardGrid, { CardGridSkeleton } from '@/components/cards/CardGrid'
 import SearchBar from '@/components/cards/SearchBar'
 import FilterPanel from '@/components/cards/FilterPanel'
@@ -17,7 +16,6 @@ export default function HomePage() {
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState<Partial<CardQueryParams>>({ size: PAGE_SIZE, page: 1 })
   const { collection } = useCollection()
-  const { data: sets } = useSets()
 
   const isSearching = query.trim().length > 0
 
@@ -52,7 +50,6 @@ export default function HomePage() {
         <FilterPanel
           filters={filters}
           onChange={setFilters}
-          sets={sets ?? []}
         />
       )}
 

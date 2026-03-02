@@ -4,8 +4,8 @@ import type { SetInfo } from '@/types'
 
 export async function GET() {
   try {
-    const data = await upstreamFetch<SetInfo[]>('/sets', 86400)
-    return NextResponse.json(data, {
+    const data = await upstreamFetch<{ items: SetInfo[] }>('/sets', 86400)
+    return NextResponse.json(data.items, {
       headers: {
         'Cache-Control': 'public, s-maxage=86400, stale-while-revalidate=172800',
       },
