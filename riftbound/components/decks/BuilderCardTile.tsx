@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import { Eye } from 'lucide-react'
 import { useCardPrice } from '@/hooks/useCardPrice'
 import { formatPrice } from '@/lib/pricing'
 import RarityBadge from '@/components/cards/RarityBadge'
@@ -13,33 +14,31 @@ interface BuilderCardTileProps {
   deckQty: number
   onAdd: (card: Card) => void
   disabledReason?: CardDisabledReason
+  onPreview?: (card: Card) => void
 }
 
-export default function BuilderCardTile({ card, deckQty, onAdd, disabledReason }: BuilderCardTileProps) {
+export default function BuilderCardTile({ card, deckQty, onAdd, disabledReason, onPreview }: BuilderCardTileProps) {
   const price = useCardPrice(card)
   const isAtLimit = disabledReason === 'limit'
   const isDomainIllegal = disabledReason === 'domain'
-  const isWrongType = disabledReason === 'type'
   const isDisabled = !!disabledReason
 
   const badgeBg = isAtLimit ? 'bg-zinc-500' : 'bg-amber-400'
   const badgeText = isAtLimit ? 'text-zinc-100' : 'text-zinc-900'
 
   return (
-    <button
-      onClick={() => onAdd(card)}
-      disabled={isDisabled}
+    <div
+      onClick={() => !isDisabled && onAdd(card)}
       title={
         isDomainIllegal ? 'Outside deck domains'
           : isAtLimit ? '3-copy limit reached'
-          : isWrongType ? 'Not allowed in main deck'
           : undefined
       }
       className={[
-        'group relative flex flex-col overflow-hidden rounded-lg border bg-zinc-900 text-left w-full transition-all',
+        'group relative flex flex-col overflow-hidden rounded-lg border bg-zinc-900 text-left w-full transition-all select-none',
         isDisabled
           ? 'border-zinc-800 opacity-40 cursor-not-allowed'
-          : 'border-zinc-800 hover:border-amber-400/50 hover:shadow-lg hover:shadow-amber-400/5',
+          : 'border-zinc-800 hover:border-amber-400/50 hover:shadow-lg hover:shadow-amber-400/5 cursor-pointer',
       ].join(' ')}
     >
       <div className="relative aspect-[3/4] w-full overflow-hidden bg-zinc-800">
@@ -76,13 +75,25 @@ export default function BuilderCardTile({ card, deckQty, onAdd, disabledReason }
           </div>
         )}
 
-        {/* Hover add overlay (only when not disabled) */}
+        {/* Hover add overlay (pointer-events-none so it doesn't block the eye button) */}
         {!isDisabled && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 transition-colors">
+          <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 transition-colors pointer-events-none">
             <span className="text-3xl font-bold text-white opacity-0 group-hover:opacity-90 transition-opacity drop-shadow">
               +
             </span>
           </div>
+        )}
+
+        {/* Preview button — always shown on hover, works even when card is at limit */}
+        {onPreview && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onPreview(card) }}
+            className="absolute bottom-1.5 right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-zinc-300 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/85 hover:text-white"
+            title="View card"
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </button>
         )}
       </div>
 
@@ -95,6 +106,6 @@ export default function BuilderCardTile({ card, deckQty, onAdd, disabledReason }
           </span>
         </div>
       </div>
-    </button>
+    </div>
   )
 }

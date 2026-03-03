@@ -15,6 +15,7 @@ import RarityBadge from '@/components/cards/RarityBadge'
 import BuilderCardTile, { type CardDisabledReason } from '@/components/decks/BuilderCardTile'
 import DeckStats from '@/components/decks/DeckStats'
 import DeckValidator, { MAIN_DECK_TYPES, type DeckEntry } from '@/components/decks/DeckValidator'
+import CardPreviewModal from '@/components/cards/CardPreviewModal'
 import { CardGridSkeleton } from '@/components/cards/CardGrid'
 import type { Card } from '@/types'
 
@@ -67,6 +68,7 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
   const [editingName, setEditingName] = useState(false)
   const [copied, setCopied] = useState(false)
   const [activeSection, setActiveSection] = useState<DeckSection>('main')
+  const [previewCard, setPreviewCard] = useState<Card | null>(null)
 
   const { data: allCards, isLoading: allCardsLoading } = useAllCards()
 
@@ -99,10 +101,19 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
   )
 
   const filteredCards = useMemo(() => {
-    if (inFilterMode) return filterCards(browseableCards, activeFilters)
-    return browseableCards
+    // When a legend is selected, hide cards outside its domains for Main/Side sections
+    // (domain-neutral cards — no domain array — are always shown)
+    let pool = browseableCards
+    if (legendDomains.size > 0 && (activeSection === 'main' || activeSection === 'sideboard')) {
+      pool = pool.filter((c) => {
+        const domains = c.classification?.domain ?? []
+        return domains.length === 0 || domains.some((d) => legendDomains.has(d))
+      })
+    }
+    if (inFilterMode) return filterCards(pool, activeFilters)
+    return pool
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [browseableCards, inFilterMode, query, filters.type, filters.rarity, filters.domain, filters.set])
+  }, [browseableCards, legendDomains, activeSection, inFilterMode, query, filters.type, filters.rarity, filters.domain, filters.set])
 
   const filteredLegends = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -434,6 +445,7 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
                     deckQty={getDeckQty(card)}
                     onAdd={handleAddCard}
                     disabledReason={getDisabledReason(card)}
+                    onPreview={setPreviewCard}
                   />
                 ))}
               </div>
@@ -627,6 +639,9 @@ export default function DeckBuilderPage({ params }: { params: Promise<{ deckId: 
           </div>
         </div>
       </div>
+
+      {/* Card preview modal */}
+      {previewCard && <CardPreviewModal card={previewCard} onClose={() => setPreviewCard(null)} />}
     </div>
   )
 }
