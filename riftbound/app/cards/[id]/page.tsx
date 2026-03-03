@@ -72,7 +72,7 @@ export default function CardDetailPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="space-y-6">
       <Link
-        href="/"
+        href="/cards"
         className="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
       >
         <ArrowLeft className="h-4 w-4" /> Back to cards

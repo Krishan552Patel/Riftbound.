@@ -1,6 +1,6 @@
 import type { Card } from '@/types'
 
-export type StoreStatus = 'live' | 'coming-soon'
+export type StoreStatus = 'live' | 'buylink' | 'coming-soon'
 
 export interface StoreConfig {
   id: string
@@ -23,13 +23,14 @@ export const STORES: StoreConfig[] = [
   {
     id: 'cardkingdom',
     name: 'Card Kingdom',
-    status: 'coming-soon',
-    buyUrl: () => null,
+    status: 'buylink',
+    buyUrl: (card) =>
+      `https://www.cardkingdom.com/catalog/search?search=${encodeURIComponent(card.name)}`,
   },
   {
     id: 'ebay',
     name: 'eBay',
-    status: 'coming-soon',
+    status: 'buylink',
     buyUrl: (card) =>
       `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(card.name + ' Riftbound')}`,
   },
